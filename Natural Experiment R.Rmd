@@ -1,0 +1,461 @@
+---
+title: "BEPP 280 Natural Experiment: The Effect of COVID-19 Shutdowns on Arrests in PHiladelphia"
+output: html_notebook
+---
+
+
+```{r}
+setwd("C:/Users/User/OneDrive/Desktop/Fall 2021/bepp 280/NP")
+library(tidyverse)
+library(lubridate)
+library(readr)
+library(dplyr)
+library(reshape2)
+library(lmtest)
+```
+```{r}
+arrests <- read.csv("~/OneDrive/Desktop/Fall 2021/bepp 280/NP/arrests.csv")
+arrests$date_value <-  as.Date(arrests$date_value,"%Y-%m-%d")
+arrests <- arrests[order(arrests$date_value),]
+```
+```{r}
+startdate20 <- as.Date("2020-03-17","%Y-%m-%d")
+startdate19 <- as.Date("2019-03-17","%Y-%m-%d")
+startdate18 <- as.Date("2018-03-17","%Y-%m-%d")
+startdate17 <- as.Date("2017-03-17","%Y-%m-%d")
+startdate16 <- as.Date("2016-03-17","%Y-%m-%d")
+startdate15 <- as.Date("2015-03-17","%Y-%m-%d")
+startdate14 <- as.Date("2014-03-17","%Y-%m-%d")
+```
+```{r}
+postdate20 <- as.Date("2020-05-2","%Y-%m-%d")
+postdate19 <- as.Date("2019-05-2","%Y-%m-%d")
+postdate18 <- as.Date("2018-05-2","%Y-%m-%d")
+postdate17 <- as.Date("2017-05-2","%Y-%m-%d")
+postdate16 <- as.Date("2016-05-2","%Y-%m-%d")
+postdate15 <- as.Date("2015-05-2","%Y-%m-%d")
+postdate14 <- as.Date("2014-05-2","%Y-%m-%d")
+
+```
+
+```{r}
+make_windows <- function(startd, num_d) {
+  window_start <- startd - num_d
+  window_end <- startd + num_d
+  window <- arrests[arrests$date_value >= window_start & arrests$date_value <= window_end,]
+  window$NumDays  <- difftime(window$date_value,startd ,units="days")
+  return(window)
+}
+```
+
+```{r}
+window20 <- make_windows(startdate20, 45)
+window19 <- make_windows(startdate19, 45)
+window18 <- make_windows(startdate18, 45)
+window17 <- make_windows(startdate17, 45)
+window16 <- make_windows(startdate16, 45)
+window15 <- make_windows(startdate15, 45)
+window14 <- make_windows(startdate14, 45)
+
+post_window20 <- make_windows(postdate20, 45)
+post_window19 <- make_windows(postdate19, 45)
+post_window18 <- make_windows(postdate18, 45)
+post_window17 <- make_windows(postdate17, 45)
+post_window16 <- make_windows(postdate16, 45)
+post_window15 <- make_windows(postdate15, 45)
+post_window14 <- make_windows(postdate14, 45)
+```
+
+ALL ARRESTS
+
+```{r}
+window20$All_Arrests <- rowSums(window20[,2:28])
+window19$All_Arrests <- rowSums(window19[,2:28])
+window18$All_Arrests <- rowSums(window18[,2:28])
+window17$All_Arrests <- rowSums(window17[,2:28])
+window16$All_Arrests <- rowSums(window16[,2:28])
+window15$All_Arrests <- rowSums(window15[,2:28])
+window14$All_Arrests <- rowSums(window14[,2:28])
+
+```
+
+```{r}
+window_list <- list(window19[ , c("NumDays", "All_Arrests")], 
+                    window18[ , c("NumDays", "All_Arrests")], 
+                    window17[ , c("NumDays", "All_Arrests")], 
+                    window16[ , c("NumDays", "All_Arrests")], 
+                    window15[ , c("NumDays", "All_Arrests")], 
+                    window14[ , c("NumDays", "All_Arrests")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+all_arrests_control <- Reduce(arrest_merge, window_list) 
+all_arrests_control$Avg <- rowMeans(all_arrests_control[,2:7])
+
+#merge control group and treatment group into one df
+all_the_arrests <- melt(list(yr2020 = window20[ , c("NumDays", "All_Arrests")], 
+                             control = all_arrests_control), id.vars = "NumDays")
+```
+```{r, fig.height = 5, fig.width=11}
+cols <- c("black", "blue")
+ggplot(all_the_arrests, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+geom_vline(xintercept = 0, col = "red")+
+  xlab("Number of Days from 17th March")+ylab("Number of Arrests")+ggtitle("All Arrests in Philadelphlia")
+
+```
+All Arrests Regression
+
+```{r}
+all_the_arrests$Post <- ifelse(all_the_arrests$NumDays>0, 1, 0)
+all_the_arrests$L1 <- as.factor(all_the_arrests$L1)
+all_the_arrests$Treat <- as.numeric (all_the_arrests$L1)
+all_the_arrests$Treatment <- ifelse(all_the_arrests$Treat>1, 1, 0)
+names(all_the_arrests)[names(all_the_arrests) == "value"] <- "number_of_arrests"
+all_the_arrests$TreatmentxPost <- all_the_arrests$Treatment*all_the_arrests$Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post + TreatmentxPost, data=all_the_arrests)
+summary(reg)
+```
+All-Arrests Post Lockdown
+
+```{r}
+post_window20$All_Arrests <- rowSums(post_window20[,2:28])
+post_window19$All_Arrests <- rowSums(post_window19[,2:28])
+post_window18$All_Arrests <- rowSums(post_window18[,2:28])
+post_window17$All_Arrests <- rowSums(post_window17[,2:28])
+post_window16$All_Arrests <- rowSums(post_window16[,2:28])
+post_window15$All_Arrests <- rowSums(post_window15[,2:28])
+post_window14$All_Arrests <- rowSums(post_window14[,2:28])
+```
+
+```{r}
+post_window_list <- list(post_window19[ , c("NumDays", "All_Arrests")], 
+                    post_window18[ , c("NumDays", "All_Arrests")], 
+                    post_window17[ , c("NumDays", "All_Arrests")], 
+                    post_window16[ , c("NumDays", "All_Arrests")], 
+                    post_window15[ , c("NumDays", "All_Arrests")], 
+                    post_window14[ , c("NumDays", "All_Arrests")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+
+all_post_arrests_control <- Reduce(arrest_merge, post_window_list) 
+all_post_arrests_control$Avg <- rowMeans(all_post_arrests_control[,2:7])
+
+#merge control group and treatment group into one df
+all_post_arrests <- melt(list(yr2020 = post_window20[ , c("NumDays", "All_Arrests")], 
+                             control = all_post_arrests_control), id.vars = "NumDays")
+```
+```{r, fig.height = 4, fig.width=12}
+cols <- c("black", "blue")
+ggplot(all_post_arrests, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+
+  annotate(geom = "vline",
+             x = c(0, 28),
+             xintercept = c(0, 28),
+             linetype = c("solid", "solid"),
+             col= "red") +
+  annotate(geom = "text",
+             label = c("Post-Lockdown Order", "Geroge Floyd Protests Begin"),
+             x = c(0, 28),
+             y = c(10, 10),
+             vjust = 1)+
+  xlab("Number of Days from May 2nd")+ylab("Number of Arrests")+ggtitle("All Arrests in Philadelphlia")
+
+```
+
+All Arrests: Post-Lockdown Regression
+
+```{r}
+all_post_arrests$timedelta <- as.numeric(all_post_arrests$NumDays)
+all_post_arrests_w<-subset(all_post_arrests, timedelta<29)
+all_post_arrests_w$Post_Post <- ifelse(all_post_arrests_w$NumDays>0, 1, 0)
+all_post_arrests_w$L1 <- as.factor(all_post_arrests_w$L1)
+all_post_arrests_w$Treat <- as.numeric (all_post_arrests_w$L1)
+all_post_arrests_w$Treatment <- ifelse(all_post_arrests_w$Treat>1, 1, 0)
+names(all_post_arrests_w)[names(all_post_arrests_w) == "value"] <- "number_of_arrests"
+all_post_arrests_w$TreatmentxPost_Post <- all_post_arrests_w$Treatment*all_post_arrests_w$Post_Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post_Post + TreatmentxPost_Post, data=all_post_arrests_w)
+summary(reg)
+```
+
+Drug Possession
+
+```{r}
+#create control group by finding average drug sales from 2014 to 2019 each day in window
+
+window_list <- list(window19[ , c("NumDays", "Drug.Possession")], 
+                    window18[ , c("NumDays", "Drug.Possession")], 
+                    window17[ , c("NumDays", "Drug.Possession")], 
+                    window16[ , c("NumDays", "Drug.Possession")], 
+                    window15[ , c("NumDays", "Drug.Possession")], 
+                    window14[ , c("NumDays", "Drug.Possession")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+drug_poss_control <- Reduce(arrest_merge, window_list) 
+drug_poss_control$Avg <- rowMeans(drug_poss_control[,2:7])
+
+#merge control group and treatment group into one df
+all_drugs_poss <- melt(list(yr2020 = window20[ , c("NumDays", "Drug.Possession")], 
+                             control = drug_poss_control), id.vars = "NumDays")
+```
+
+```{r, fig.height = 5, fig.width=11}
+cols <- c("black", "blue")
+ggplot(all_drugs_poss, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+geom_vline(xintercept = 0, col = "red")+
+  xlab("Number of Days from 17th March")+ylab("Number of Arrests")+ggtitle("Drug Possession Arrests")
+
+```
+
+Drug Possession Arrests: Regression
+
+```{r}
+all_drugs_poss$Post <- ifelse(all_drugs_poss$NumDays>0, 1, 0)
+all_drugs_poss$L1 <- as.factor(all_drugs_poss$L1)
+all_drugs_poss$Treat <- as.numeric (all_drugs_poss$L1)
+all_drugs_poss$Treatment <- ifelse(all_drugs_poss$Treat>1, 1, 0)
+names(all_drugs_poss)[names(all_drugs_poss) == "value"] <- "number_of_arrests"
+all_drugs_poss$TreatmentxPost <- all_drugs_poss$Treatment*all_drugs_poss$Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post + TreatmentxPost, data=all_drugs_poss)
+summary(reg)
+```
+Drug Possession Arrests: POst-Lockdown
+
+```{r}
+post_window_list <- list(post_window19[ , c("NumDays", "Drug.Possession")], 
+                    post_window18[ , c("NumDays", "Drug.Possession")], 
+                    post_window17[ , c("NumDays", "Drug.Possession")], 
+                    post_window16[ , c("NumDays", "Drug.Possession")], 
+                    post_window15[ , c("NumDays", "Drug.Possession")], 
+                    post_window14[ , c("NumDays", "Drug.Possession")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+
+all_post_drugs_control <- Reduce(arrest_merge, post_window_list) 
+all_post_drugs_control$Avg <- rowMeans(all_post_drugs_control[,2:7])
+
+#merge control group and treatment group into one df
+all_post_drugs <- melt(list(yr2020 = post_window20[ , c("NumDays", "Drug.Possession")], 
+                             control = all_post_drugs_control), id.vars = "NumDays")
+```
+```{r, fig.height = 4, fig.width=12}
+cols <- c("black", "blue")
+ggplot(all_post_drugs, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+
+  annotate(geom = "vline",
+             x = c(0, 28),
+             xintercept = c(0, 28),
+             linetype = c("solid", "solid"),
+             col= "red") +
+  annotate(geom = "text",
+             label = c("Post-Lockdown Order", "Geroge Floyd Protests Begin"),
+             x = c(0, 28),
+             y = c(10, 10),
+             vjust = 7)+
+  xlab("Number of Days from May 2nd")+ylab("Number of Arrests")+ggtitle("Drug Possession Arrests in Philadelphlia")
+
+```
+```{r}
+all_post_drugs$timedelta <- as.numeric(all_post_drugs$NumDays)
+all_post_drugs_w<-subset(all_post_drugs, timedelta<29)
+all_post_drugs_w$Post_Post <- ifelse(all_post_drugs_w$NumDays>0, 1, 0)
+all_post_drugs_w$L1 <- as.factor(all_post_drugs_w$L1)
+all_post_drugs_w$Treat <- as.numeric (all_post_drugs_w$L1)
+all_post_drugs_w$Treatment <- ifelse(all_post_drugs_w$Treat>1, 1, 0)
+names(all_post_drugs_w)[names(all_post_drugs_w) == "value"] <- "number_of_arrests"
+all_post_drugs_w$TreatmentxPost_Post <- all_post_drugs_w$Treatment*all_post_drugs_w$Post_Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post_Post + TreatmentxPost_Post, data=all_post_drugs_w)
+summary(reg)
+```
+
+Firearms Possession
+```{r}
+#create control group by finding average Illegal Firearm POssession Arrests from 2014 to 2019 each day in window
+
+window_list <- list(window19[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    window18[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    window17[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    window16[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    window15[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    window14[ , c("NumDays", "Illegal.Firearms.Possession")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+firearms_control <- Reduce(arrest_merge, window_list) 
+#drug_sales_control <- window_list %>% reduce(inner_join, by = "NumDays")
+firearms_control$Avg <- rowMeans(firearms_control[,2:7])
+
+
+#merge control group and treatment group into one df
+all_firearms <- melt(list(yr2020 = window20[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                             control = firearms_control), id.vars = "NumDays")
+
+```
+```{r, fig.height = 5, fig.width=11}
+cols <- c("black", "blue")
+ggplot(all_firearms, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+geom_vline(xintercept = 0, col = "red")+
+  xlab("Number of Days from 17th March")+ylab("Number of Arrests")+ggtitle("Illegal Firearm Possession Arrests")
+
+```
+
+Illegal Firearm Possession Arrests: Regression
+
+```{r}
+all_firearms$Post <- ifelse(all_firearms$NumDays>0, 1, 0)
+all_firearms$L1 <- as.factor(all_firearms$L1)
+all_firearms$Treat <- as.numeric (all_firearms$L1)
+all_firearms$Treatment <- ifelse(all_firearms$Treat>1, 1, 0)
+names(all_firearms)[names(all_firearms) == "value"] <- "number_of_arrests"
+all_firearms$TreatmentxPost <- all_firearms$Treatment*all_firearms$Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post + TreatmentxPost, data=all_firearms)
+summary(reg)
+```
+Drug Possession Arrests: POst-Lockdown
+
+```{r}
+post_window_list <- list(post_window19[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    post_window18[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    post_window17[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    post_window16[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    post_window15[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                    post_window14[ , c("NumDays", "Illegal.Firearms.Possession")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+
+all_post_firearm_control <- Reduce(arrest_merge, post_window_list) 
+all_post_firearm_control$Avg <- rowMeans(all_post_firearm_control[,2:7])
+
+#merge control group and treatment group into one df
+all_post_f <- melt(list(yr2020 = post_window20[ , c("NumDays", "Illegal.Firearms.Possession")], 
+                             control = all_post_firearm_control), id.vars = "NumDays")
+```
+```{r, fig.height = 4, fig.width=12}
+cols <- c("black", "blue")
+ggplot(all_post_f, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+
+  annotate(geom = "vline",
+             x = c(0, 28),
+             xintercept = c(0, 28),
+             linetype = c("solid", "solid"),
+             col= "red") +
+  annotate(geom = "text",
+             label = c("Post-Lockdown Order", "Geroge Floyd Protests Begin"),
+             x = c(0, 28),
+             y = c(10, 10),
+             vjust = -1)+
+  xlab("Number of Days from May 2nd")+ylab("Number of Arrests")+ggtitle("Illegal Firearm Possessions Arrests in Philadelphlia")
+
+```
+```{r}
+all_post_f$timedelta <- as.numeric(all_post_f$NumDays)
+all_post_f_w<-subset(all_post_f, timedelta<29)
+all_post_f_w$Post_Post <- ifelse(all_post_f_w$NumDays>0, 1, 0)
+all_post_f_w$L1 <- as.factor(all_post_f_w$L1)
+all_post_f_w$Treat <- as.numeric (all_post_f_w$L1)
+all_post_f_w$Treatment <- ifelse(all_post_f_w$Treat>1, 1, 0)
+names(all_post_f_w)[names(all_post_f_w) == "value"] <- "number_of_arrests"
+all_post_f_w$TreatmentxPost_Post <- all_post_f_w$Treatment*all_post_f_w$Post_Post
+```
+
+```{r}
+reg = lm(number_of_arrests ~ Treatment + Post_Post + TreatmentxPost_Post, data=all_post_f_w)
+summary(reg)
+```
+All Arrests Long-Term Changes
+
+```{r}
+#start_d <- as.Date("2020-05-2","%Y-%m-%d")
+
+long_window <- function(startd, num_d, num_d2) {
+  window_start <- startd - num_d
+  window_end <- startd + num_d2
+  window <- arrests[arrests$date_value >= window_start & arrests$date_value <= window_end,]
+  window$NumDays  <- difftime(window$date_value,startd ,units="days")
+  return(window)
+}
+
+```
+```{r}
+longwindow20 <- long_window(startdate20, 50, 250)
+longwindow19 <- long_window(startdate19, 50, 250)
+longwindow18 <- long_window(startdate18, 50, 250)
+longwindow17 <- long_window(startdate17, 50, 250)
+longwindow16 <- long_window(startdate16, 50, 250)
+longwindow15 <- long_window(startdate15, 50, 250)
+longwindow14 <- long_window(startdate14, 50, 250)
+
+longwindow20$All_Arrests <- rowSums(longwindow20[,2:28])
+longwindow19$All_Arrests <- rowSums(longwindow19[,2:28])
+longwindow18$All_Arrests <- rowSums(longwindow18[,2:28])
+longwindow17$All_Arrests <- rowSums(longwindow17[,2:28])
+longwindow16$All_Arrests <- rowSums(longwindow16[,2:28])
+longwindow15$All_Arrests <- rowSums(longwindow15[,2:28])
+longwindow14$All_Arrests <- rowSums(longwindow14[,2:28])
+
+```
+
+```{r}
+window_list <- list(longwindow19[ , c("NumDays", "All_Arrests")], 
+                    longwindow18[ , c("NumDays", "All_Arrests")], 
+                    longwindow17[ , c("NumDays", "All_Arrests")], 
+                    longwindow16[ , c("NumDays", "All_Arrests")], 
+                    longwindow15[ , c("NumDays", "All_Arrests")], 
+                    longwindow14[ , c("NumDays", "All_Arrests")]) 
+
+arrest_merge  <- function(df1, df2){                               
+  merge(df1, df2, by = "NumDays")}
+all_arrests_control <- Reduce(arrest_merge, window_list) 
+all_arrests_control$Avg <- rowMeans(all_arrests_control[,2:7])
+
+#merge control group and treatment group into one df
+all_the_arrests <- melt(list(yr2020 = longwindow20[ , c("NumDays", "All_Arrests")], 
+                             control = all_arrests_control), id.vars = "NumDays")
+```
+```{r, fig.height = 4, fig.width=13}
+cols <- c("black", "blue")
+ggplot(all_the_arrests, aes(NumDays, value, colour = L1)) + geom_line() +
+  scale_colour_manual(values = cols)+
+  geom_vline(xintercept = 0, col = "red")+
+  xlab("Number of Days from 17th March")+ylab("Number of Arrests")+
+  ggtitle("All Arrests in Philadelphlia")+
+  annotate(geom = "vline",
+             x = c(0, 46, 73, 231),
+             xintercept = c(0, 46, 73, 231),
+             linetype = c("solid", "solid", "solid", "solid"),
+             col= "red")+
+   annotate(geom = "text",
+             label = c("Lockdown Order", "Order Lifted", "Protests Begin", "Presidential Elections"),
+             x = c(0, 46, 73, 231),
+             y = c(20, 225, 20, 225),
+             vjust = 1)
+
+```
+
+
+
+
+
+
+
+
+
+
